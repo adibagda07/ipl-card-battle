@@ -27,21 +27,15 @@ setupSocket(io);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🏏 IPL 2026 Fantasy Card Battle Server Started!\n`);
+  console.log(`Local: http://localhost:${PORT}`);
   const interfaces = os.networkInterfaces();
-  const localIPs = [];
   Object.values(interfaces).forEach(iface => {
     iface?.forEach(addr => {
-      if (addr.family === 'IPv4' && !addr.internal) localIPs.push(addr.address);
+      if (addr.family === 'IPv4' && !addr.internal) {
+        console.log(`Network: http://${addr.address}:${PORT}`);
+      }
     });
   });
-
-  console.log('\n🏏 IPL 2026 Fantasy Card Battle Server Started!\n');
-  console.log(`📡 Local:   http://localhost:${PORT}`);
-  localIPs.forEach(ip => console.log(`📡 Network: http://${ip}:${PORT}`));
-  console.log('\n📋 Share the Network URL with friends on same WiFi!');
-  console.log('\n🌐 For internet sharing:');
-  console.log('   ngrok:     npx ngrok http ' + PORT);
-  console.log('   cloudflare: npx cloudflared tunnel --url http://localhost:' + PORT);
-  console.log('   localtunnel: npx lt --port ' + PORT);
-  console.log('\n');
+  console.log(`\nShare the Network URL with friends on same WiFi!\n`);
 });
