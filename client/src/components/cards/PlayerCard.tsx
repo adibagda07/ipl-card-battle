@@ -1,5 +1,5 @@
 import React from 'react';
-import { IPLPlayer, TEAM_COLORS, RARITY_COLORS } from '../../data/players';
+import { IPLPlayer, TEAM_COLORS } from '../../data/players';
 
 interface PlayerCardProps {
   player: IPLPlayer;
@@ -15,10 +15,7 @@ interface PlayerCardProps {
 }
 
 const ROLE_ICONS: Record<string, string> = {
-  Batsman: '🏏',
-  Bowler: '🎯',
-  'All-Rounder': '⚡',
-  'Wicket-Keeper': '🧤',
+  Batsman: '🏏', Bowler: '🎯', 'All-Rounder': '⚡', 'Wicket-Keeper': '🧤',
 };
 
 const JERSEY_NUMBERS: Record<string, number> = {
@@ -34,276 +31,198 @@ const JERSEY_NUMBERS: Record<string, number> = {
   'Lasith Malinga': 14, 'Kieron Pollard': 55,
 };
 
-// SVG cricket player silhouettes by role
-const PLAYER_SVG: Record<string, (color: string, secondary: string) => string> = {
-  Batsman: (c, s) => `
-    <svg viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
-      <!-- Body -->
-      <ellipse cx="50" cy="95" rx="22" ry="32" fill="${c}" opacity="0.9"/>
-      <!-- Head -->
-      <circle cx="50" cy="38" r="16" fill="${s}" opacity="0.95"/>
-      <!-- Helmet -->
-      <path d="M34 36 Q34 18 50 18 Q66 18 66 36 Q66 28 50 26 Q34 26 34 36Z" fill="${c}"/>
-      <!-- Visor -->
-      <path d="M34 38 Q34 36 50 35 Q66 36 66 38" stroke="${s}" stroke-width="3" fill="none" opacity="0.8"/>
-      <!-- Bat -->
-      <rect x="64" y="55" width="8" height="50" rx="2" fill="${s}" opacity="0.9" transform="rotate(-20, 68, 80)"/>
-      <rect x="62" y="100" width="12" height="6" rx="1" fill="${c}" transform="rotate(-20, 68, 103)"/>
-      <!-- Arms -->
-      <path d="M50 75 Q70 65 72 72" stroke="${s}" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <path d="M50 75 Q30 70 28 80" stroke="${s}" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <!-- Legs -->
-      <path d="M42 125 L38 140" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-      <path d="M58 125 L62 140" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-      <!-- Gloves -->
-      <ellipse cx="71" cy="72" rx="5" ry="4" fill="${s}" opacity="0.8"/>
-    </svg>`,
-  Bowler: (c, s) => `
-    <svg viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
-      <!-- Body -->
-      <ellipse cx="48" cy="92" rx="20" ry="30" fill="${c}" opacity="0.9"/>
-      <!-- Head -->
-      <circle cx="48" cy="36" r="15" fill="${s}" opacity="0.95"/>
-      <!-- Cap -->
-      <path d="M33 34 Q33 18 48 18 Q63 18 63 34Z" fill="${c}"/>
-      <rect x="30" y="34" width="36" height="4" rx="2" fill="${c}"/>
-      <!-- Bowling arm raised -->
-      <path d="M48 70 Q62 50 72 35" stroke="${s}" stroke-width="7" fill="none" stroke-linecap="round"/>
-      <!-- Ball -->
-      <circle cx="74" cy="32" r="7" fill="#CC3333" opacity="0.9"/>
-      <path d="M68 32 Q74 28 80 32" stroke="#8B0000" stroke-width="1.5" fill="none"/>
-      <path d="M68 32 Q74 36 80 32" stroke="#8B0000" stroke-width="1.5" fill="none"/>
-      <!-- Other arm -->
-      <path d="M48 70 Q32 72 28 82" stroke="${s}" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <!-- Legs stride -->
-      <path d="M40 120 L32 140" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-      <path d="M56 120 L64 138" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-    </svg>`,
-  'All-Rounder': (c, s) => `
-    <svg viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
-      <!-- Body strong -->
-      <ellipse cx="50" cy="93" rx="24" ry="31" fill="${c}" opacity="0.9"/>
-      <!-- Head -->
-      <circle cx="50" cy="36" r="16" fill="${s}" opacity="0.95"/>
-      <!-- Helmet half -->
-      <path d="M34 34 Q34 17 50 17 Q66 17 66 34Z" fill="${c}"/>
-      <rect x="32" y="34" width="36" height="3" rx="1.5" fill="${s}" opacity="0.7"/>
-      <!-- Bat angled -->
-      <rect x="65" y="50" width="7" height="48" rx="2" fill="${s}" opacity="0.85" transform="rotate(-15, 68, 74)"/>
-      <!-- Ball -->
-      <circle cx="28" cy="75" r="6" fill="#CC3333" opacity="0.85"/>
-      <!-- Arms spread -->
-      <path d="M50 72 Q68 62 70 68" stroke="${s}" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <path d="M50 72 Q32 68 28 75" stroke="${s}" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <!-- Legs -->
-      <path d="M42 122 L38 140" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-      <path d="M58 122 L62 140" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-    </svg>`,
-  'Wicket-Keeper': (c, s) => `
-    <svg viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
-      <!-- Body crouched -->
-      <ellipse cx="50" cy="100" rx="22" ry="26" fill="${c}" opacity="0.9"/>
-      <!-- Head -->
-      <circle cx="50" cy="40" r="16" fill="${s}" opacity="0.95"/>
-      <!-- Keeper helmet with grille -->
-      <path d="M34 38 Q34 20 50 20 Q66 20 66 38Z" fill="${c}"/>
-      <line x1="46" y1="22" x2="44" y2="38" stroke="${s}" stroke-width="1.5" opacity="0.6"/>
-      <line x1="50" y1="21" x2="50" y2="38" stroke="${s}" stroke-width="1.5" opacity="0.6"/>
-      <line x1="54" y1="22" x2="56" y2="38" stroke="${s}" stroke-width="1.5" opacity="0.6"/>
-      <path d="M34 38 Q34 36 50 35 Q66 36 66 38" stroke="${s}" stroke-width="2" fill="none" opacity="0.7"/>
-      <!-- Gloves big -->
-      <ellipse cx="30" cy="90" rx="8" ry="6" fill="${s}" opacity="0.85"/>
-      <ellipse cx="70" cy="90" rx="8" ry="6" fill="${s}" opacity="0.85"/>
-      <!-- Arms spread wide -->
-      <path d="M50 78 Q40 82 30 90" stroke="${s}" stroke-width="7" fill="none" stroke-linecap="round"/>
-      <path d="M50 78 Q60 82 70 90" stroke="${s}" stroke-width="7" fill="none" stroke-linecap="round"/>
-      <!-- Stumps -->
-      <line x1="44" y1="118" x2="44" y2="140" stroke="#D4A017" stroke-width="3"/>
-      <line x1="50" y1="118" x2="50" y2="140" stroke="#D4A017" stroke-width="3"/>
-      <line x1="56" y1="118" x2="56" y2="140" stroke="#D4A017" stroke-width="3"/>
-      <line x1="41" y1="120" x2="59" y2="120" stroke="#D4A017" stroke-width="2"/>
-      <!-- Legs crouched -->
-      <path d="M40 122 L34 136" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-      <path d="M60 122 L66 136" stroke="${c}" stroke-width="7" stroke-linecap="round"/>
-    </svg>`,
-};
-
 function getJerseyNumber(name: string): string {
   const num = JERSEY_NUMBERS[name];
   return num ? `#${num}` : `#${(name.charCodeAt(0) + name.charCodeAt(name.length - 1)) % 99 + 1}`;
 }
 
-function lightenColor(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, (num >> 16) + amount);
-  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
-  const b = Math.min(255, (num & 0xff) + amount);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+function lighten(hex: string, amt: number): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, (n >> 16) + amt);
+  const g = Math.min(255, ((n >> 8) & 0xff) + amt);
+  const b = Math.min(255, (n & 0xff) + amt);
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
 }
 
+const RARITY_BORDER: Record<string, string> = {
+  Legendary: '#FFD700', Epic: '#9B59B6', Rare: '#3498DB', Common: '#555',
+};
+const RARITY_BG: Record<string, string> = {
+  Legendary: 'linear-gradient(160deg,#1a1000,#2d1f00,#1a1000)',
+  Epic: 'linear-gradient(160deg,#0d0018,#1a0030,#0d0018)',
+  Rare: 'linear-gradient(160deg,#001428,#002244,#001428)',
+  Common: 'linear-gradient(160deg,#0f0f0f,#1c1c1c,#0f0f0f)',
+};
+const RARITY_GLOW: Record<string, string> = {
+  Legendary: '0 0 22px #FFD70066,0 0 44px #FFD70022',
+  Epic: '0 0 18px #9B59B655,0 0 36px #9B59B622',
+  Rare: '0 0 12px #3498DB44',
+  Common: 'none',
+};
+
+const PlayerSVG: React.FC<{ role: string; teamColor: string; lightColor: string }> = ({ role, teamColor: c, lightColor: s }) => {
+  if (role === 'Bowler') return (
+    <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+      <ellipse cx="48" cy="90" rx="20" ry="28" fill={c} opacity="0.92" />
+      <circle cx="48" cy="36" r="15" fill={s} opacity="0.95" />
+      <path d="M33 34 Q33 18 48 18 Q63 18 63 34Z" fill={c} />
+      <rect x="30" y="33" width="36" height="4" rx="2" fill={c} />
+      <path d="M48 68 Q62 48 72 33" stroke={s} strokeWidth="7" fill="none" strokeLinecap="round" />
+      <circle cx="74" cy="30" r="7" fill="#CC3333" opacity="0.9" />
+      <path d="M68 30 Q74 26 80 30" stroke="#8B0000" strokeWidth="1.5" fill="none" />
+      <path d="M68 30 Q74 34 80 30" stroke="#8B0000" strokeWidth="1.5" fill="none" />
+      <path d="M48 68 Q32 70 28 80" stroke={s} strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M40 116 L32 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+      <path d="M56 116 L64 128" stroke={c} strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  );
+  if (role === 'Wicket-Keeper') return (
+    <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+      <ellipse cx="50" cy="96" rx="22" ry="24" fill={c} opacity="0.92" />
+      <circle cx="50" cy="38" r="15" fill={s} opacity="0.95" />
+      <path d="M35 36 Q35 20 50 20 Q65 20 65 36Z" fill={c} />
+      <line x1="46" y1="22" x2="44" y2="36" stroke={s} strokeWidth="1.5" opacity="0.6" />
+      <line x1="50" y1="21" x2="50" y2="36" stroke={s} strokeWidth="1.5" opacity="0.6" />
+      <line x1="54" y1="22" x2="56" y2="36" stroke={s} strokeWidth="1.5" opacity="0.6" />
+      <ellipse cx="28" cy="88" rx="8" ry="6" fill={s} opacity="0.85" />
+      <ellipse cx="72" cy="88" rx="8" ry="6" fill={s} opacity="0.85" />
+      <path d="M50 76 Q40 80 28 88" stroke={s} strokeWidth="7" fill="none" strokeLinecap="round" />
+      <path d="M50 76 Q60 80 72 88" stroke={s} strokeWidth="7" fill="none" strokeLinecap="round" />
+      <line x1="44" y1="114" x2="44" y2="130" stroke="#D4A017" strokeWidth="3" />
+      <line x1="50" y1="114" x2="50" y2="130" stroke="#D4A017" strokeWidth="3" />
+      <line x1="56" y1="114" x2="56" y2="130" stroke="#D4A017" strokeWidth="3" />
+      <line x1="41" y1="116" x2="59" y2="116" stroke="#D4A017" strokeWidth="2" />
+      <path d="M40 118 L34 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+      <path d="M60 118 L66 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  );
+  if (role === 'All-Rounder') return (
+    <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+      <ellipse cx="50" cy="91" rx="24" ry="29" fill={c} opacity="0.92" />
+      <circle cx="50" cy="34" r="15" fill={s} opacity="0.95" />
+      <path d="M35 32 Q35 16 50 16 Q65 16 65 32Z" fill={c} />
+      <rect x="33" y="32" width="34" height="3" rx="1.5" fill={s} opacity="0.7" />
+      <rect x="65" y="48" width="7" height="46" rx="2" fill={s} opacity="0.85" transform="rotate(-15,68,71)" />
+      <circle cx="28" cy="73" r="6" fill="#CC3333" opacity="0.85" />
+      <path d="M50 70 Q68 60 70 66" stroke={s} strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M50 70 Q32 66 28 73" stroke={s} strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M42 118 L38 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+      <path d="M58 118 L62 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  );
+  return (
+    <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+      <ellipse cx="50" cy="92" rx="22" ry="30" fill={c} opacity="0.92" />
+      <circle cx="50" cy="36" r="15" fill={s} opacity="0.95" />
+      <path d="M35 34 Q35 17 50 17 Q65 17 65 34 Q65 26 50 24 Q35 24 35 34Z" fill={c} />
+      <path d="M35 36 Q35 34 50 33 Q65 34 65 36" stroke={s} strokeWidth="3" fill="none" opacity="0.8" />
+      <rect x="64" y="53" width="8" height="48" rx="2" fill={s} opacity="0.9" transform="rotate(-20,68,77)" />
+      <rect x="62" y="97" width="12" height="6" rx="1" fill={c} transform="rotate(-20,68,100)" />
+      <path d="M50 73 Q70 63 72 70" stroke={s} strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M50 73 Q30 68 28 78" stroke={s} strokeWidth="6" fill="none" strokeLinecap="round" />
+      <ellipse cx="71" cy="70" rx="5" ry="4" fill={s} opacity="0.8" />
+      <path d="M42 120 L38 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+      <path d="M58 120 L62 130" stroke={c} strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  );
+};
+
 export const PlayerCard: React.FC<PlayerCardProps> = ({
-  player, size = 'md', onClick, selected, isCaptain, isViceCaptain, showStats, playedValue, isWinner, dimmed
+  player, size = 'md', onClick, selected, isCaptain, isViceCaptain, playedValue, isWinner, dimmed
 }) => {
-  const rarityColor = RARITY_COLORS[player.rarity];
-  const teamColor = TEAM_COLORS[player.team] || '#444444';
-  const lightTeam = lightenColor(teamColor, 80);
+  const teamColor = TEAM_COLORS[player.team] || '#444';
+  const lightColor = lighten(teamColor, 90);
+  const border = RARITY_BORDER[player.rarity];
+  const jersey = getJerseyNumber(player.name);
 
-  const rarityGradients: Record<string, string> = {
-    Legendary: 'linear-gradient(135deg, #1a1000, #2d1f00, #1a1000)',
-    Epic: 'linear-gradient(135deg, #0d0018, #1a0030, #0d0018)',
-    Rare: 'linear-gradient(135deg, #001428, #002244, #001428)',
-    Common: 'linear-gradient(135deg, #0f0f0f, #1a1a1a, #0f0f0f)',
-  };
-
-  const rarityBorder: Record<string, string> = {
-    Legendary: '#FFD700',
-    Epic: '#9B59B6',
-    Rare: '#3498DB',
-    Common: '#666',
-  };
-
-  const rarityGlow: Record<string, string> = {
-    Legendary: '0 0 20px #FFD70066, 0 0 40px #FFD70033',
-    Epic: '0 0 20px #9B59B666, 0 0 40px #9B59B633',
-    Rare: '0 0 15px #3498DB44',
-    Common: 'none',
-  };
-
-  const sizeConfig = {
-    sm: { w: 110, h: 158, avatarH: 52, nameSize: 9, statSize: 8, padding: 6 },
-    md: { w: 168, h: 240, avatarH: 78, nameSize: 11, statSize: 9, padding: 10 },
-    lg: { w: 210, h: 300, avatarH: 98, nameSize: 13, statSize: 10, padding: 12 },
+  const sz = {
+    sm: { w: 112, h: 162, avatarH: 54, ns: 9, ss: 8 },
+    md: { w: 170, h: 244, avatarH: 80, ns: 11, ss: 9 },
+    lg: { w: 212, h: 306, avatarH: 100, ns: 13, ss: 10 },
   }[size];
 
-  const jersey = getJerseyNumber(player.name);
-  const svgFn = PLAYER_SVG[player.role] || PLAYER_SVG['Batsman'];
-  const playerSvg = svgFn(teamColor, lightTeam);
-  const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(playerSvg)}`;
-
-  const borderWidth = player.rarity === 'Legendary' ? 3 : player.rarity === 'Epic' ? 2 : 2;
-
   return (
-    <div
-      onClick={onClick}
-      style={{
-        width: sizeConfig.w,
-        height: sizeConfig.h,
-        borderRadius: 14,
-        border: `${borderWidth}px solid ${rarityBorder[player.rarity]}`,
-        boxShadow: selected
-          ? `0 0 0 3px #F59E0B, ${rarityGlow[player.rarity]}`
-          : isWinner
-          ? `0 0 0 3px #22C55E, ${rarityGlow[player.rarity]}`
-          : rarityGlow[player.rarity],
-        background: rarityGradients[player.rarity],
-        cursor: onClick ? 'pointer' : 'default',
-        opacity: dimmed ? 0.4 : 1,
-        transform: selected ? 'scale(1.05)' : 'scale(1)',
-        transition: 'all 0.2s ease',
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-      }}
-    >
-      {/* Legendary shimmer overlay */}
-      {player.rarity === 'Legendary' && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none',
-          background: 'linear-gradient(105deg, transparent 40%, rgba(255,215,0,0.08) 50%, transparent 60%)',
-          animation: 'shimmer 3s infinite',
-        }} />
-      )}
+    <div onClick={onClick} style={{
+      width: sz.w, height: sz.h, borderRadius: 14,
+      border: `${player.rarity === 'Legendary' ? 3 : 2}px solid ${border}`,
+      boxShadow: selected ? `0 0 0 3px #F59E0B,${RARITY_GLOW[player.rarity]}`
+        : isWinner ? `0 0 0 3px #22C55E,${RARITY_GLOW[player.rarity]}`
+        : RARITY_GLOW[player.rarity],
+      background: RARITY_BG[player.rarity],
+      cursor: onClick ? 'pointer' : 'default',
+      opacity: dimmed ? 0.4 : 1,
+      transform: selected ? 'scale(1.05)' : 'scale(1)',
+      transition: 'all 0.2s ease',
+      position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', flexShrink: 0,
+    }}>
 
-      {/* TOP STRIP — team color band */}
+      {/* Team header band */}
       <div style={{
-        background: `linear-gradient(90deg, ${teamColor}, ${lightenColor(teamColor, 40)})`,
-        padding: '4px 8px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        background: `linear-gradient(90deg,${teamColor},${lighten(teamColor, 40)})`,
+        padding: '4px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: sizeConfig.statSize + 1, letterSpacing: 1, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+        <span style={{ color: '#fff', fontWeight: 900, fontSize: sz.ss + 1, letterSpacing: 1, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
           {player.team}
         </span>
-        <span style={{ fontSize: sizeConfig.statSize + 2 }}>
+        <span style={{ fontSize: sz.ss + 2 }}>
           {player.rarity === 'Legendary' ? '⭐' : player.rarity === 'Epic' ? '💜' : player.rarity === 'Rare' ? '💙' : '⬜'}
         </span>
       </div>
 
-      {/* PLAYER ILLUSTRATION */}
+      {/* Player illustration area */}
       <div style={{
-        height: sizeConfig.avatarH,
-        position: 'relative',
-        background: `radial-gradient(ellipse at 50% 100%, ${teamColor}33 0%, transparent 70%)`,
-        display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
-        overflow: 'hidden',
+        height: sz.avatarH, position: 'relative',
+        background: `radial-gradient(ellipse at 50% 100%,${teamColor}33 0%,transparent 70%)`,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden',
       }}>
-        {/* Jersey number watermark */}
+        {/* Big jersey number watermark */}
         <div style={{
           position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          fontSize: sizeConfig.avatarH * 0.55,
-          fontWeight: 900,
-          color: `${teamColor}22`,
-          fontFamily: 'Arial Black, sans-serif',
-          userSelect: 'none',
-          letterSpacing: -2,
+          transform: 'translate(-50%,-50%)',
+          fontSize: sz.avatarH * 0.6, fontWeight: 900,
+          color: `${teamColor}25`, fontFamily: 'Arial Black,sans-serif',
+          userSelect: 'none', letterSpacing: -2, pointerEvents: 'none',
         }}>
           {jersey.replace('#', '')}
         </div>
-        {/* Player SVG illustration */}
-        <img
-          src={svgDataUrl}
-          alt={player.name}
-          style={{ height: '95%', width: 'auto', objectFit: 'contain', position: 'relative', zIndex: 2 }}
-        />
-        {/* Jersey number badge */}
+
+        {/* SVG player figure */}
+        <div style={{ height: '96%', width: '70%', position: 'relative', zIndex: 2 }}>
+          <PlayerSVG role={player.role} teamColor={teamColor} lightColor={lightColor} />
+        </div>
+
+        {/* Jersey badge */}
         <div style={{
-          position: 'absolute', top: 4, left: 6,
-          background: `${teamColor}cc`,
-          border: `1px solid ${rarityBorder[player.rarity]}88`,
-          borderRadius: 6,
-          padding: '1px 5px',
-          fontSize: sizeConfig.statSize,
-          fontWeight: 900,
-          color: '#fff',
-          zIndex: 3,
+          position: 'absolute', top: 4, left: 6, zIndex: 3,
+          background: `${teamColor}cc`, border: `1px solid ${border}88`,
+          borderRadius: 6, padding: '1px 5px',
+          fontSize: sz.ss, fontWeight: 900, color: '#fff',
         }}>
           {jersey}
         </div>
       </div>
 
-      {/* DIVIDER */}
-      <div style={{ height: 2, background: `linear-gradient(90deg, transparent, ${rarityBorder[player.rarity]}, transparent)` }} />
+      {/* Rarity divider line */}
+      <div style={{ height: 2, background: `linear-gradient(90deg,transparent,${border},transparent)` }} />
 
-      {/* NAME & ROLE */}
+      {/* Name & role */}
       <div style={{ padding: '4px 8px 2px', textAlign: 'center' }}>
         <div style={{
-          color: '#fff', fontWeight: 900, fontSize: sizeConfig.nameSize + 1,
-          lineHeight: 1.2, letterSpacing: 0.3,
+          color: '#fff', fontWeight: 900, fontSize: sz.ns + 1, lineHeight: 1.2,
           textShadow: `0 0 8px ${teamColor}99`,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           {player.name}
         </div>
-        <div style={{ color: '#aaa', fontSize: sizeConfig.statSize, marginTop: 1 }}>
+        <div style={{ color: '#999', fontSize: sz.ss, marginTop: 1 }}>
           {ROLE_ICONS[player.role]} {player.role}
         </div>
       </div>
 
-      {/* STATS GRID */}
+      {/* Stats grid */}
       {size !== 'sm' && (
-        <div style={{
-          padding: '4px 8px',
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '2px 8px',
-          flex: 1,
-        }}>
+        <div style={{ padding: '4px 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', flex: 1 }}>
           {[
             { label: 'Runs', value: player.runs },
             { label: 'Wkts', value: player.wickets },
@@ -313,54 +232,41 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
             { label: 'Avg', value: player.battingAverage },
           ].map(s => (
             <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#666', fontSize: sizeConfig.statSize - 1 }}>{s.label}</span>
-              <span style={{ color: '#ddd', fontWeight: 700, fontSize: sizeConfig.statSize }}>{s.value}</span>
+              <span style={{ color: '#666', fontSize: sz.ss - 1 }}>{s.label}</span>
+              <span style={{ color: '#ddd', fontWeight: 700, fontSize: sz.ss }}>{s.value}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* BOTTOM — fantasy points + market value */}
+      {/* Footer */}
       <div style={{
         padding: '3px 8px 5px',
-        background: `linear-gradient(180deg, transparent, ${teamColor}22)`,
-        borderTop: `1px solid ${rarityBorder[player.rarity]}33`,
+        background: `linear-gradient(180deg,transparent,${teamColor}22)`,
+        borderTop: `1px solid ${border}33`,
       }}>
-        {/* FP bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-          <span style={{ color: rarityBorder[player.rarity], fontSize: sizeConfig.statSize - 1, fontWeight: 700 }}>FP</span>
-          <span style={{ color: rarityBorder[player.rarity], fontSize: sizeConfig.statSize, fontWeight: 900 }}>{player.fantasyPoints}</span>
+          <span style={{ color: border, fontSize: sz.ss - 1, fontWeight: 700 }}>FP</span>
+          <span style={{ color: border, fontSize: sz.ss, fontWeight: 900 }}>{player.fantasyPoints}</span>
         </div>
         <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', marginBottom: 3 }}>
           <div style={{
             height: '100%', borderRadius: 4,
             width: `${Math.min((player.fantasyPoints / 1400) * 100, 100)}%`,
-            background: `linear-gradient(90deg, ${rarityBorder[player.rarity]}, ${teamColor})`,
+            background: `linear-gradient(90deg,${border},${teamColor})`,
           }} />
         </div>
         <div style={{ textAlign: 'center' }}>
-          <span style={{ color: '#F59E0B', fontWeight: 700, fontSize: sizeConfig.statSize - 1 }}>
-            💰 {player.marketValue} pts
-          </span>
+          <span style={{ color: '#F59E0B', fontWeight: 700, fontSize: sz.ss - 1 }}>💰 {player.marketValue} pts</span>
         </div>
       </div>
 
-      {/* Captain / VC badges */}
+      {/* C / VC badges */}
       {isCaptain && (
-        <div style={{
-          position: 'absolute', top: 24, right: 5, zIndex: 20,
-          background: '#F59E0B', color: '#000',
-          fontWeight: 900, fontSize: 10, borderRadius: 5,
-          padding: '1px 5px', boxShadow: '0 0 6px #F59E0B88',
-        }}>C</div>
+        <div style={{ position: 'absolute', top: 24, right: 5, zIndex: 20, background: '#F59E0B', color: '#000', fontWeight: 900, fontSize: 10, borderRadius: 5, padding: '1px 5px' }}>C</div>
       )}
       {isViceCaptain && (
-        <div style={{
-          position: 'absolute', top: 24, right: isCaptain ? 28 : 5, zIndex: 20,
-          background: '#3B82F6', color: '#fff',
-          fontWeight: 900, fontSize: 10, borderRadius: 5,
-          padding: '1px 5px', boxShadow: '0 0 6px #3B82F688',
-        }}>VC</div>
+        <div style={{ position: 'absolute', top: 24, right: isCaptain ? 28 : 5, zIndex: 20, background: '#3B82F6', color: '#fff', fontWeight: 900, fontSize: 10, borderRadius: 5, padding: '1px 5px' }}>VC</div>
       )}
 
       {/* Played value overlay */}
@@ -368,27 +274,13 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: isWinner ? 'rgba(34,197,94,0.25)' : 'rgba(0,0,0,0.6)',
-          borderRadius: 12,
+          background: isWinner ? 'rgba(34,197,94,0.25)' : 'rgba(0,0,0,0.6)', borderRadius: 12,
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{
-              fontSize: 36, fontWeight: 900, color: isWinner ? '#22C55E' : '#fff',
-              textShadow: isWinner ? '0 0 20px #22C55E' : '0 2px 8px rgba(0,0,0,0.8)',
-            }}>{playedValue}</div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: isWinner ? '#22C55E' : '#fff' }}>{playedValue}</div>
             {isWinner && <div style={{ color: '#22C55E', fontWeight: 900, fontSize: 12, marginTop: 4 }}>👑 WINNER</div>}
           </div>
         </div>
-      )}
-
-      {/* Winner pulse ring */}
-      {isWinner && (
-        <div style={{
-          position: 'absolute', inset: -3, zIndex: 1,
-          borderRadius: 16, border: '3px solid #22C55E',
-          animation: 'pulse 1s infinite',
-          pointerEvents: 'none',
-        }} />
       )}
     </div>
   );
