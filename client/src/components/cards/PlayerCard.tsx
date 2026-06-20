@@ -178,7 +178,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const jersey = getJerseyNumber(player.name);
   const svgFn = PLAYER_SVG[player.role] || PLAYER_SVG['Batsman'];
   const playerSvg = svgFn(teamColor, lightTeam);
-  const svgDataUrl = `data:image/svg+xml;base64,${btoa(playerSvg)}`;
+  const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(playerSvg)}`;
 
   const borderWidth = player.rarity === 'Legendary' ? 3 : player.rarity === 'Epic' ? 2 : 2;
 
