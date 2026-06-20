@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  
+  body {
+    background: #050a05;
+    color: #f0f4f0;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0a0e0a; }
+  ::-webkit-scrollbar-thumb { background: #F59E0B; border-radius: 3px; }
+}
+
+@layer components {
+  .stadium-bg {
+    background: 
+      radial-gradient(ellipse at 50% 100%, rgba(34, 197, 94, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 20% 50%, rgba(245, 158, 11, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 50%, rgba(245, 158, 11, 0.05) 0%, transparent 50%),
+      linear-gradient(180deg, #050a05 0%, #0a1a0a 50%, #050a05 100%);
+  }
+
+  .card-legendary {
+    background: linear-gradient(135deg, #1a1200 0%, #2d1f00 50%, #1a1200 100%);
+    border: 2px solid #F59E0B;
+    box-shadow: 0 0 20px rgba(245,158,11,0.3), inset 0 0 20px rgba(245,158,11,0.05);
+  }
+
+  .card-epic {
+    background: linear-gradient(135deg, #150d2a 0%, #220f40 50%, #150d2a 100%);
+    border: 2px solid #8B5CF6;
+    box-shadow: 0 0 15px rgba(139,92,246,0.3), inset 0 0 15px rgba(139,92,246,0.05);
+  }
+
+  .card-rare {
+    background: linear-gradient(135deg, #0d1629 0%, #0f1f40 50%, #0d1629 100%);
+    border: 2px solid #3B82F6;
+    box-shadow: 0 0 10px rgba(59,130,246,0.2);
+  }
+
+  .card-common {
+    background: linear-gradient(135deg, #0f150f 0%, #1a221a 50%, #0f150f 100%);
+    border: 2px solid #374151;
+  }
+
+  .btn-gold {
+    @apply bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 
+           text-black font-bold py-3 px-6 rounded-lg transition-all duration-200 
+           shadow-lg hover:shadow-amber-500/30 active:scale-95 tracking-wider uppercase;
+  }
+
+  .btn-outline {
+    @apply border-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 
+           font-semibold py-3 px-6 rounded-lg transition-all duration-200 
+           active:scale-95 tracking-wider uppercase;
+  }
+
+  .input-field {
+    @apply bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white 
+           placeholder-white/30 focus:outline-none focus:border-amber-500 
+           focus:ring-1 focus:ring-amber-500 transition-colors w-full;
+  }
+
+  .glass-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+  }
+
+  .rarity-legendary { @apply text-amber-400; }
+  .rarity-epic { @apply text-purple-400; }
+  .rarity-rare { @apply text-blue-400; }
+  .rarity-common { @apply text-gray-400; }
+}
+
+/* Particle-like background dots */
+.bg-dots {
+  background-image: radial-gradient(circle, rgba(245,158,11,0.15) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Card flip animation */
+.card-flip {
+  perspective: 1000px;
+}
+.card-flip-inner {
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+.card-flip.flipped .card-flip-inner {
+  transform: rotateY(180deg);
+}
+.card-front, .card-back {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.card-back {
+  transform: rotateY(180deg);
+}
+
+/* Shimmer effect for cards */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.2) 50%, transparent 100%);
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Stat bar fill animation */
+@keyframes fillBar {
+  from { width: 0; }
+}
+.stat-bar-fill {
+  animation: fillBar 0.8s ease-out forwards;
+}
+
+/* Countdown urgent */
+@keyframes urgentPulse {
+  0%, 100% { color: #ef4444; transform: scale(1); }
+  50% { color: #fca5a5; transform: scale(1.1); }
+}
+.timer-urgent {
+  animation: urgentPulse 0.5s ease-in-out infinite;
+}
