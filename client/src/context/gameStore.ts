@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { GameState, GameSettings, Category } from '../types/game';
 
-const SOCKET_URL = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
+const SOCKET_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+  ? window.location.origin 
+  : 'http://localhost:3001';
 
 interface GameStore {
   socket: Socket | null;
