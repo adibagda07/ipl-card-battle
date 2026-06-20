@@ -18,7 +18,8 @@ const rooms = new Map();
 function createRoom(hostId, hostName) {
   const code = generateRoomCode();
   const room = {
-    code,
+  code,
+  roomCode: code,
     phase: 'lobby',
     players: [{
       id: hostId,
