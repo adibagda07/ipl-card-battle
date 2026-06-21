@@ -14,12 +14,14 @@ function shuffle(array) {
 }
 
 const rooms = new Map();
+// Track socket -> { roomCode, playerName } for reconnect
+const socketRoomMap = new Map();
 
 function createRoom(hostId, hostName) {
   const code = generateRoomCode();
   const room = {
-  code,
-  roomCode: code,
+    code,
+    roomCode: code,
     phase: 'lobby',
     players: [{
       id: hostId,
@@ -53,15 +55,26 @@ function createRoom(hostId, hostName) {
     battleInterval: null,
   };
   rooms.set(code, room);
+  socketRoomMap.set(hostId, { roomCode: code, playerName: hostName });
   return room;
 }
 
 function joinRoom(roomCode, playerId, playerName) {
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Room not found' };
-  if (room.phase !== 'lobby') return { error: 'Game already in progress' };
+
+  // Check if this is a reconnect (player name already exists)
+  const existing = room.players.find(p => p.name === playerName);
+  if (existing) {
+    // Reconnect: update socket id
+    existing.id = playerId;
+    existing.isConnected = true;
+    socketRoomMap.set(playerId, { roomCode, playerName });
+    return { room, reconnected: true };
+  }
+
+  if (room.phase !== 'lobby') return { error: 'Game in progress — use your original name to rejoin' };
   if (room.players.length >= room.settings.maxPlayers) return { error: 'Room is full' };
-  if (room.players.find(p => p.name === playerName)) return { error: 'Name already taken' };
 
   room.players.push({
     id: playerId,
@@ -76,33 +89,67 @@ function joinRoom(roomCode, playerId, playerName) {
     captain: null,
     viceCaptain: null,
   });
+  socketRoomMap.set(playerId, { roomCode, playerName });
   return { room };
+}
+
+function disconnectPlayer(roomCode, playerId) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  const player = room.players.find(p => p.id === playerId);
+  if (player) player.isConnected = false;
+}
+
+function reconnectPlayer(roomCode, playerId) {
+  const room = rooms.get(roomCode);
+  if (!room) return null;
+  const player = room.players.find(p => p.id === playerId);
+  if (player) {
+    player.isConnected = true;
+    return room;
+  }
+  return null;
+}
+
+// Build a balanced auction pool with nationality and role mix
+function buildBalancedPool(numPlayers, teamSize) {
+  const needed = numPlayers * teamSize;
+
+  const indian = PLAYERS.filter(p => p.nationality === 'India');
+  const overseas = PLAYERS.filter(p => p.nationality !== 'India');
+
+  // Role categories
+  const getByRole = (arr, role) => arr.filter(p => p.role === role);
+  const getRarity = (arr, rarity) => arr.filter(p => p.rarity === rarity);
+
+  // Ensure at least 4 overseas per team
+  const overseasNeeded = numPlayers * 4;
+  const indianNeeded = needed - overseasNeeded;
+
+  // Sort by rarity priority
+  const rarityOrder = { Legendary: 0, Epic: 1, Rare: 2, Common: 3 };
+  const byRarity = (a, b) => rarityOrder[a.rarity] - rarityOrder[b.rarity];
+
+  const overseasPool = shuffle(overseas).sort(byRarity).slice(0, Math.min(overseasNeeded + 15, overseas.length));
+  const indianPool = shuffle(indian).sort(byRarity).slice(0, Math.min(indianNeeded + 15, indian.length));
+
+  // Merge and shuffle maintaining rarity order within nationality groups
+  const combined = [...overseasPool, ...indianPool];
+  combined.sort(byRarity);
+
+  return combined.slice(0, Math.min(needed + 25, PLAYERS.length));
 }
 
 function startAuction(roomCode, io) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  // Reset budgets
   room.players.forEach(p => {
     p.budget = room.settings.budget;
     p.team = [];
   });
 
-  // Build player queue: pick enough players for all teams
-  const needed = room.players.length * room.settings.teamSize;
-  // Prioritize legendaries and epics, then fill with rares and commons
-  const legendaries = PLAYERS.filter(p => p.rarity === 'Legendary');
-  const epics = PLAYERS.filter(p => p.rarity === 'Epic');
-  const rares = PLAYERS.filter(p => p.rarity === 'Rare');
-  const commons = PLAYERS.filter(p => p.rarity === 'Common');
-
-  const pool = [
-    ...shuffle(legendaries),
-    ...shuffle(epics),
-    ...shuffle(rares),
-    ...shuffle(commons),
-  ].slice(0, Math.min(needed + 20, PLAYERS.length));
+  const pool = buildBalancedPool(room.players.length, room.settings.teamSize);
 
   room.phase = 'auction';
   room.auctionState = {
@@ -123,24 +170,80 @@ function placeBid(roomCode, bidderId, amount) {
   const room = rooms.get(roomCode);
   if (!room || !room.auctionState) return null;
   const a = room.auctionState;
-  
+
   const bidder = room.players.find(p => p.id === bidderId);
   if (!bidder) return null;
   if (bidder.budget < amount) return null;
   if (amount <= a.currentBid) return null;
   if (bidder.team.length >= room.settings.teamSize) return null;
 
+  // Role limit check
+  const currentIplPlayer = PLAYERS.find(p => p.id === a.playerQueue[a.currentPlayerIndex]);
+  if (currentIplPlayer) {
+    const roleCount = bidder.team.filter(c => c.role === currentIplPlayer.role).length;
+    const limits = getRoleLimits(room.settings.teamSize);
+    if (roleCount >= limits[currentIplPlayer.role].max) return null;
+  }
+
   a.currentBid = amount;
   a.currentBidder = bidderId;
-  a.timer = Math.max(a.timer, 8); // Reset timer partially
-  a.bids.push({ 
-    playerId: a.playerQueue[a.currentPlayerIndex], 
-    bidderId, 
-    amount, 
-    timestamp: Date.now() 
+  a.timer = Math.max(a.timer, 8);
+  a.bids.push({
+    playerId: a.playerQueue[a.currentPlayerIndex],
+    bidderId, amount, timestamp: Date.now()
   });
 
   return room;
+}
+
+function getRoleLimits(teamSize) {
+  return {
+    'Batsman': { min: 3, max: 5 },
+    'Bowler': { min: 3, max: 5 },
+    'All-Rounder': { min: 1, max: 4 },
+    'Wicket-Keeper': { min: 1, max: 2 },
+  };
+}
+
+function autoFillTeam(room) {
+  const teamSize = room.settings.teamSize;
+  room.players.forEach(player => {
+    if (player.team.length >= teamSize) return;
+
+    const needed = teamSize - player.team.length;
+    const takenIds = new Set(room.players.flatMap(p => p.team.map(c => c.id)));
+    const available = PLAYERS.filter(p => !takenIds.has(p.id));
+
+    // Try to fill role gaps first
+    const limits = getRoleLimits(teamSize);
+    let filled = 0;
+
+    for (const [role, limit] of Object.entries(limits)) {
+      const currentCount = player.team.filter(c => c.role === role).length;
+      const shortfall = limit.min - currentCount;
+      if (shortfall > 0) {
+        const candidates = shuffle(available.filter(p => p.role === role && !takenIds.has(p.id)));
+        const toAdd = candidates.slice(0, shortfall);
+        toAdd.forEach(p => {
+          player.team.push(p);
+          takenIds.add(p.id);
+          filled++;
+        });
+      }
+    }
+
+    // Fill remaining with any available players
+    const stillNeeded = teamSize - player.team.length;
+    if (stillNeeded > 0) {
+      const remaining = shuffle(PLAYERS.filter(p => !takenIds.has(p.id)));
+      remaining.slice(0, stillNeeded).forEach(p => {
+        player.team.push(p);
+        takenIds.add(p.id);
+      });
+    }
+
+    player.budget = Math.max(0, player.budget);
+  });
 }
 
 function advanceAuction(roomCode) {
@@ -148,7 +251,6 @@ function advanceAuction(roomCode) {
   if (!room || !room.auctionState) return null;
   const a = room.auctionState;
 
-  // Finalize current player
   const currentPlayerId = a.playerQueue[a.currentPlayerIndex];
   if (a.currentBidder) {
     const winner = room.players.find(p => p.id === a.currentBidder);
@@ -162,20 +264,28 @@ function advanceAuction(roomCode) {
     }
   }
 
-  // Check if all teams are filled
   const allFull = room.players.every(p => p.team.length >= room.settings.teamSize);
-  
-  // Move to next player
   a.currentPlayerIndex++;
 
   if (allFull || a.currentPlayerIndex >= a.playerQueue.length) {
-    // Auction over
+    // Auto-fill any incomplete teams
+    autoFillTeam(room);
     room.phase = 'team-review';
     a.isActive = false;
     return { room, auctionDone: true };
   }
 
-  // Next player
+  // Check if remaining players can still bid (budget check)
+  const playersWhoCanBid = room.players.filter(p =>
+    p.team.length < room.settings.teamSize && p.budget > 0
+  );
+  if (playersWhoCanBid.length === 0) {
+    autoFillTeam(room);
+    room.phase = 'team-review';
+    a.isActive = false;
+    return { room, auctionDone: true };
+  }
+
   const nextPlayer = PLAYERS.find(p => p.id === a.playerQueue[a.currentPlayerIndex]);
   a.currentBid = nextPlayer?.minimumBid || 10;
   a.currentBidder = null;
@@ -187,23 +297,23 @@ function advanceAuction(roomCode) {
 function tickAuction(roomCode) {
   const room = rooms.get(roomCode);
   if (!room || !room.auctionState || !room.auctionState.isActive) return null;
+
   room.auctionState.timer--;
+
   if (room.auctionState.timer <= 0) {
     return advanceAuction(roomCode);
   }
+
   return { room, auctionDone: false };
 }
 
 function startBattle(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return null;
-  
-  // Assign captains if not set
+
   room.players.forEach(p => {
-    if (!p.captain && p.team.length > 0) {
-      p.captain = p.team[0].id;
-      p.viceCaptain = p.team[1]?.id || null;
-    }
+    if (!p.captain && p.team.length > 0) p.captain = p.team[0]?.id || null;
+    if (!p.viceCaptain && p.team.length > 1) p.viceCaptain = p.team[1]?.id || null;
   });
 
   room.phase = 'battle';
@@ -236,27 +346,23 @@ function selectCategory(roomCode, playerId, category) {
 
 function playCard(roomCode, playerId, cardId) {
   const room = rooms.get(roomCode);
-  if (!room || !room.currentRound) return null;
-  if (!room.currentRound.selectedCategory) return null;
-  
+  if (!room || !room.currentRound || !room.currentRound.selectedCategory) return null;
+
   const player = room.players.find(p => p.id === playerId);
   if (!player) return null;
-  
-  // Check card is in player's team and not already played
+
   const hasCard = player.team.find(c => c.id === cardId);
   if (!hasCard) return null;
-  
-  // Remove already played
+
   const alreadyPlayed = room.currentRound.playedCards.find(pc => pc.playerId === playerId);
   if (alreadyPlayed) return null;
 
   room.currentRound.playedCards.push({ playerId, cardId });
 
-  // Check if all players have played
-  const eligiblePlayers = room.currentRound.isTie 
-    ? room.currentRound.tiedPlayers 
+  const eligiblePlayers = room.currentRound.isTie
+    ? room.currentRound.tiedPlayers
     : room.players.filter(p => p.team.length > 0).map(p => p.id);
-  
+
   if (room.currentRound.playedCards.length >= eligiblePlayers.length) {
     return resolveRound(roomCode);
   }
@@ -267,15 +373,13 @@ function playCard(roomCode, playerId, cardId) {
 function getCategoryValue(player, cardId, category, settings) {
   const card = player.team.find(c => c.id === cardId);
   if (!card) return 0;
-  
+
   let value = card[category] || 0;
-  
-  // Economy: lower is better, invert
+
   if (category === 'economy') {
     value = card.economy > 0 ? (20 - card.economy) : 0;
   }
 
-  // Captain/vice-captain bonuses
   if (settings.captainBonus) {
     if (player.captain === cardId) value *= 1.1;
     else if (player.viceCaptain === cardId) value *= 1.05;
@@ -312,38 +416,35 @@ function resolveRound(roomCode) {
       winPlayer.roundWins++;
       winPlayer.totalPoints += scores.length;
     }
-    
-    // Remove played cards from teams
+
+    // Remove played cards
     round.playedCards.forEach(pc => {
       const p = room.players.find(pl => pl.id === pc.playerId);
       if (p) p.team = p.team.filter(c => c.id !== pc.cardId);
     });
 
+    room.totalRounds++;
+
     // Check game over
     const playersWithCards = room.players.filter(p => p.team.length > 0);
     if (room.settings.winMode === 'lastcard' && playersWithCards.length <= 1) {
-      room.phase = 'gameover';
-      room.winner = playersWithCards[0]?.id || round.winner;
-      room.roundHistory.push({ ...round });
+      endGame(room);
       return room;
     }
 
-    room.totalRounds++;
     if (room.totalRounds >= 20 || playersWithCards.length < 2) {
       endGame(room);
-    } else {
-      room.roundHistory.push({ ...round });
-      // Next round
-      setTimeout(() => {
-        startNextRound(roomCode, round.winner);
-      }, 4000);
+      return room;
     }
+
+    room.roundHistory.push({ ...round });
+    setTimeout(() => {
+      startNextRound(roomCode, round.winner);
+    }, 4000);
   } else {
-    // Tie
     round.isTie = true;
     round.tiedPlayers = winners.map(w => w.playerId);
     round.playedCards = [];
-    // Don't remove cards yet - tiebreaker needed
   }
 
   return room;
@@ -352,7 +453,7 @@ function resolveRound(roomCode) {
 function startNextRound(roomCode, lastWinnerId) {
   const room = rooms.get(roomCode);
   if (!room) return;
-  
+
   const nextActive = lastWinnerId || room.players[0].id;
   room.currentRound = {
     roundNumber: room.totalRounds + 1,
@@ -365,13 +466,10 @@ function startNextRound(roomCode, lastWinnerId) {
     tiedPlayers: [],
     scores: [],
   };
-  
-  return room;
 }
 
 function endGame(room) {
   room.phase = 'gameover';
-  
   let winner;
   if (room.settings.winMode === 'rounds') {
     winner = room.players.reduce((a, b) => a.roundWins > b.roundWins ? a : b);
@@ -397,19 +495,8 @@ function getRoom(roomCode) {
   return rooms.get(roomCode);
 }
 
-function disconnectPlayer(roomCode, playerId) {
-  const room = rooms.get(roomCode);
-  if (!room) return;
-  const player = room.players.find(p => p.id === playerId);
-  if (player) player.isConnected = false;
-}
-
-function reconnectPlayer(roomCode, playerId) {
-  const room = rooms.get(roomCode);
-  if (!room) return null;
-  const player = room.players.find(p => p.id === playerId);
-  if (player) player.isConnected = true;
-  return room;
+function getSocketRoom(socketId) {
+  return socketRoomMap.get(socketId);
 }
 
 function updateSettings(roomCode, settings) {
@@ -444,5 +531,5 @@ function restartGame(roomCode) {
 module.exports = {
   createRoom, joinRoom, startAuction, placeBid, advanceAuction, tickAuction,
   startBattle, selectCategory, playCard, startNextRound, setCaptain,
-  getRoom, disconnectPlayer, reconnectPlayer, updateSettings, restartGame,
+  getRoom, getSocketRoom, disconnectPlayer, reconnectPlayer, updateSettings, restartGame,
 };

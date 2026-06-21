@@ -1,6 +1,7 @@
 const engine = require('../game-engine/engine');
 
 let auctionTimers = new Map();
+let battleTimers = new Map();
 
 function setupSocket(io) {
   io.on('connection', (socket) => {
@@ -10,7 +11,6 @@ function setupSocket(io) {
       const room = engine.createRoom(socket.id, playerName);
       socket.join(room.code);
       socket.emit('room_created', { room });
-      console.log(`Room created: ${room.code} by ${playerName}`);
     });
 
     socket.on('join_room', ({ roomCode, playerName }) => {
@@ -20,9 +20,12 @@ function setupSocket(io) {
         return;
       }
       socket.join(roomCode.toUpperCase());
-      socket.emit('room_joined', { room: result.room });
+      if (result.reconnected) {
+        socket.emit('room_rejoined', { room: result.room });
+      } else {
+        socket.emit('room_joined', { room: result.room });
+      }
       io.to(roomCode.toUpperCase()).emit('room_updated', { room: result.room });
-      console.log(`${playerName} joined room ${roomCode}`);
     });
 
     socket.on('update_settings', ({ roomCode, settings }) => {
@@ -40,9 +43,7 @@ function setupSocket(io) {
 
     socket.on('place_bid', ({ roomCode, amount }) => {
       const room = engine.placeBid(roomCode, socket.id, amount);
-      if (room) {
-        io.to(roomCode).emit('bid_placed', { room });
-      }
+      if (room) io.to(roomCode).emit('bid_placed', { room });
     });
 
     socket.on('start_battle', ({ roomCode }) => {
@@ -59,7 +60,6 @@ function setupSocket(io) {
       const room = engine.selectCategory(roomCode, socket.id, category);
       if (room) {
         io.to(roomCode).emit('category_selected', { room });
-        // Start battle timer
         startBattleTimer(io, roomCode);
       }
     });
@@ -68,7 +68,6 @@ function setupSocket(io) {
       const room = engine.playCard(roomCode, socket.id, cardId);
       if (room) {
         io.to(roomCode).emit('room_updated', { room });
-        // Check if round resolved
         if (room.currentRound?.revealed) {
           setTimeout(() => {
             const updatedRoom = engine.getRoom(roomCode);
@@ -76,6 +75,12 @@ function setupSocket(io) {
           }, 4000);
         }
       }
+    });
+
+    socket.on('pass_bid', ({ roomCode }) => {
+      // Allow a player to explicitly pass on current auction item
+      const room = engine.getRoom(roomCode);
+      if (room) io.to(roomCode).emit('room_updated', { room });
     });
 
     socket.on('restart_game', ({ roomCode }) => {
@@ -93,8 +98,12 @@ function setupSocket(io) {
 
     socket.on('disconnect', () => {
       console.log(`Player disconnected: ${socket.id}`);
-      // Find and update room
-      // Note: in production, you'd want to track which room each socket is in
+      const info = engine.getSocketRoom(socket.id);
+      if (info) {
+        engine.disconnectPlayer(info.roomCode, socket.id);
+        const room = engine.getRoom(info.roomCode);
+        if (room) io.to(info.roomCode).emit('room_updated', { room });
+      }
     });
   });
 }
@@ -103,10 +112,7 @@ function startAuctionTimer(io, roomCode) {
   stopAuctionTimer(roomCode);
   const interval = setInterval(() => {
     const result = engine.tickAuction(roomCode);
-    if (!result) {
-      stopAuctionTimer(roomCode);
-      return;
-    }
+    if (!result) { stopAuctionTimer(roomCode); return; }
     io.to(roomCode).emit('auction_tick', { room: result.room });
     if (result.auctionDone) {
       stopAuctionTimer(roomCode);
@@ -124,15 +130,18 @@ function stopAuctionTimer(roomCode) {
 }
 
 function startBattleTimer(io, roomCode) {
-  // Auto-resolve after timer if not all cards played
+  if (battleTimers.has(roomCode)) {
+    clearTimeout(battleTimers.get(roomCode));
+  }
   const room = engine.getRoom(roomCode);
   if (!room) return;
-  setTimeout(() => {
+  const timeout = setTimeout(() => {
     const r = engine.getRoom(roomCode);
     if (r && r.currentRound && !r.currentRound.revealed) {
       io.to(roomCode).emit('room_updated', { room: r });
     }
   }, (room.settings.roundTimer + 5) * 1000);
+  battleTimers.set(roomCode, timeout);
 }
 
 module.exports = { setupSocket };

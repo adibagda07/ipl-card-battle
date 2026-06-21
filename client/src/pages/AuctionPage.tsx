@@ -1,286 +1,310 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGameStore } from '../context/gameStore';
-import { PLAYERS, TEAM_COLORS, RARITY_COLORS } from '../data/players';
+import { PLAYERS, TEAM_COLORS } from '../data/players';
+import { CATEGORY_LABELS } from '../types/game';
 
-const AuctionPage: React.FC = () => {
-  const { room, myId, placeBid } = useGameStore();
+const ROLE_LIMITS = {
+  Batsman: { min: 3, max: 5 },
+  Bowler: { min: 3, max: 5 },
+  'All-Rounder': { min: 1, max: 4 },
+  'Wicket-Keeper': { min: 1, max: 2 },
+};
+
+const ROLE_ICONS: Record<string, string> = {
+  Batsman: '🏏', Bowler: '🎯', 'All-Rounder': '⚡', 'Wicket-Keeper': '🧤',
+};
+
+export default function AuctionPage() {
+  const { room, myId, placeBid, passBid } = useGameStore();
   const [customBid, setCustomBid] = useState('');
+  const [showSquad, setShowSquad] = useState(false);
 
-  if (!room?.auctionState) return null;
+  if (!room || !room.auctionState) return null;
+
   const a = room.auctionState;
   const me = room.players.find(p => p.id === myId);
+  const currentPlayer = PLAYERS.find(p => p.id === a.playerQueue[a.currentPlayerIndex]);
+  const currentBidderName = room.players.find(p => p.id === a.currentBidder)?.name;
+  const teamColor = currentPlayer ? (TEAM_COLORS[currentPlayer.team] || '#444') : '#444';
 
-  const currentPlayerId = a.playerQueue[a.currentPlayerIndex];
-  const currentPlayer = PLAYERS.find(p => p.id === currentPlayerId);
-  const currentBidder = room.players.find(p => p.id === a.currentBidder);
-  const rarity = currentPlayer ? RARITY_COLORS[currentPlayer.rarity] : null;
-  const teamColor = currentPlayer ? (TEAM_COLORS[currentPlayer.team] || { primary: '#666', secondary: '#888' }) : null;
+  const myRoleCounts = useMemo(() => {
+    if (!me) return {};
+    return me.team.reduce((acc: Record<string, number>, p) => {
+      acc[p.role] = (acc[p.role] || 0) + 1;
+      return acc;
+    }, {});
+  }, [me?.team]);
 
-  const myBudget = me?.budget || 0;
-  const myTeamSize = me?.team.length || 0;
-  const teamFull = myTeamSize >= room.settings.teamSize;
-  const timerUrgent = a.timer <= 5;
+  const canBidOnCurrent = useMemo(() => {
+    if (!me || !currentPlayer) return false;
+    const roleCount = myRoleCounts[currentPlayer.role] || 0;
+    const limit = ROLE_LIMITS[currentPlayer.role as keyof typeof ROLE_LIMITS];
+    return roleCount < (limit?.max || 99);
+  }, [me, currentPlayer, myRoleCounts]);
 
-  const quickBids = [
-    a.currentBid + 5,
-    a.currentBid + 10,
-    a.currentBid + 25,
-    a.currentBid + 50,
-  ].filter(b => b <= myBudget && !teamFull);
+  const budgetWarning = me && me.budget < 100;
+  const teamSlots = room.settings.teamSize;
+  const myTeamCount = me?.team.length || 0;
+  const slotsLeft = teamSlots - myTeamCount;
+
+  const quickBids = useMemo(() => {
+    const base = a.currentBid;
+    return [base + 5, base + 10, base + 25, base + 50].filter(b => b <= (me?.budget || 0));
+  }, [a.currentBid, me?.budget]);
 
   const handleBid = (amount: number) => {
-    if (amount <= a.currentBid || amount > myBudget || teamFull) return;
+    if (!me || me.budget < amount) return;
     placeBid(amount);
   };
 
-  if (!currentPlayer) return (
-    <div className="min-h-screen stadium-bg flex items-center justify-center">
-      <div className="text-white text-2xl">Loading auction...</div>
-    </div>
-  );
+  const handleCustomBid = () => {
+    const amount = parseInt(customBid);
+    if (!isNaN(amount) && amount > a.currentBid) {
+      handleBid(amount);
+      setCustomBid('');
+    }
+  };
 
-  const initials = currentPlayer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+  const timerUrgent = a.timer <= 5;
+
+  const overseasCount = me?.team.filter(p => p.nationality !== 'India').length || 0;
+  const indianCount = me?.team.filter(p => p.nationality === 'India').length || 0;
 
   return (
-    <div className="min-h-screen stadium-bg bg-dots flex flex-col items-center px-4 py-6">
-      <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <div className="font-display text-3xl text-amber-400">🔨 IPL MEGA AUCTION</div>
-          <p className="text-gray-400 text-sm mt-1">
-            Player {a.currentPlayerIndex + 1} of {a.playerQueue.length}
-            {' • '}Sold: {a.soldPlayers.length}
-          </p>
+    <div className="min-h-screen stadium-bg flex flex-col">
+      {/* Header */}
+      <div className="text-center py-4 px-4">
+        <h1 className="text-2xl font-black text-gold-400 font-display uppercase tracking-widest">🔨 IPL Mega Auction</h1>
+        <p className="text-gray-400 text-sm mt-1">
+          Player {a.currentPlayerIndex + 1} of {a.playerQueue.length} • Sold: {a.soldPlayers.length}
+        </p>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-4 px-4 pb-4 max-w-6xl mx-auto w-full">
+
+        {/* Left: Current player card */}
+        <div className="flex flex-col items-center gap-3 lg:w-72">
+          {currentPlayer && (
+            <div className="glass-panel rounded-2xl p-4 w-full" style={{ borderColor: teamColor + '66' }}>
+              {/* Team color header */}
+              <div className="rounded-lg p-2 mb-3 flex justify-between items-center" style={{ background: teamColor }}>
+                <span className="font-black text-white text-sm tracking-widest">{currentPlayer.team}</span>
+                <span>{currentPlayer.rarity === 'Legendary' ? '⭐' : currentPlayer.rarity === 'Epic' ? '💜' : currentPlayer.rarity === 'Rare' ? '💙' : '⬜'}</span>
+              </div>
+
+              {/* Player silhouette area */}
+              <div className="h-32 flex items-center justify-center mb-2 relative" style={{ background: `radial-gradient(ellipse at 50% 100%,${teamColor}44,transparent)` }}>
+                <div className="text-8xl font-black opacity-10 absolute" style={{ color: teamColor }}>
+                  {currentPlayer.name.split(' ').map(w => w[0]).join('')}
+                </div>
+                <div className="text-6xl relative z-10">
+                  {ROLE_ICONS[currentPlayer.role]}
+                </div>
+              </div>
+
+              <div className="text-center mb-3">
+                <div className="font-black text-white text-xl">{currentPlayer.name}</div>
+                <div className="text-gray-400 text-sm">{ROLE_ICONS[currentPlayer.role]} {currentPlayer.role} • {currentPlayer.nationality}</div>
+                <div className="text-xs mt-1" style={{ color: currentPlayer.rarity === 'Legendary' ? '#FFD700' : currentPlayer.rarity === 'Epic' ? '#9B59B6' : currentPlayer.rarity === 'Rare' ? '#3498DB' : '#666' }}>
+                  {currentPlayer.rarity}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 text-xs mb-3">
+                {[
+                  ['🏏 Runs', currentPlayer.runs],
+                  ['📊 Avg', currentPlayer.battingAverage],
+                  ['⚡ SR', currentPlayer.strikeRate],
+                  ['🎯 Wkts', currentPlayer.wickets],
+                  ['💨 Eco', currentPlayer.economy || '-'],
+                  ['6️⃣ Sixes', currentPlayer.sixes],
+                  ['🧤 Catches', currentPlayer.catches],
+                  ['⭐ FP', currentPlayer.fantasyPoints],
+                ].map(([label, val]) => (
+                  <div key={String(label)} className="flex justify-between">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="text-gray-200 font-bold">{val}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between text-xs border-t border-white/10 pt-2">
+                <span className="text-gray-400">Min Bid: <span className="text-gold-400 font-bold">{currentPlayer.minimumBid} pts</span></span>
+                <span className="text-gray-400">Market: <span className="text-blue-400 font-bold">{currentPlayer.marketValue} pts</span></span>
+              </div>
+
+              {/* Role limit warning */}
+              {!canBidOnCurrent && me && (
+                <div className="mt-2 text-xs text-red-400 text-center bg-red-900/30 rounded p-1">
+                  ⚠️ Max {ROLE_LIMITS[currentPlayer.role as keyof typeof ROLE_LIMITS]?.max} {currentPlayer.role}s reached
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Current Player Card - Large */}
-          <div className="md:col-span-1 flex flex-col items-center">
-            {/* Card */}
-            <div
-              className={`relative rounded-2xl overflow-hidden w-64 animate-slide-up`}
-              style={{
-                background: `linear-gradient(135deg, ${teamColor?.primary}22, ${teamColor?.secondary}11)`,
-                border: `2px solid ${rarity?.border}`,
-                boxShadow: `0 0 30px ${rarity?.glow}55`,
-              }}
-            >
-              {currentPlayer.rarity === 'Legendary' && (
-                <div className="absolute inset-0 shimmer pointer-events-none z-10" />
-              )}
+        {/* Right: Bidding + standings */}
+        <div className="flex-1 flex flex-col gap-4">
 
-              {/* Team banner */}
-              <div className="p-4 text-center" style={{ background: `${teamColor?.primary}33` }}>
-                <span className="font-display text-2xl" style={{ color: teamColor?.secondary }}>{currentPlayer.team}</span>
-              </div>
-
-              {/* Avatar */}
-              <div className="flex justify-center py-6">
-                <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center font-display text-4xl"
-                  style={{
-                    background: `radial-gradient(circle, ${teamColor?.primary}88, ${teamColor?.primary}22)`,
-                    border: `3px solid ${rarity?.border}`,
-                    boxShadow: `0 0 25px ${rarity?.glow}`,
-                    color: teamColor?.secondary,
-                  }}
-                >
-                  {initials}
+          {/* Current bid + timer */}
+          <div className="glass-panel rounded-2xl p-5">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <div className="text-gray-400 text-sm mb-1">Current Bid</div>
+                <div className="text-4xl font-black text-gold-400">{a.currentBid} <span className="text-lg text-gray-400">pts</span></div>
+                <div className="text-sm text-gray-400 mt-1">
+                  {currentBidderName ? `🔥 ${currentBidderName} is winning` : 'No bids yet'}
                 </div>
               </div>
-
-              {/* Info */}
-              <div className="px-4 pb-2 text-center">
-                <h2 className="text-xl font-bold text-white">{currentPlayer.name}</h2>
-                <p className="text-gray-400 text-sm">{currentPlayer.role} • {currentPlayer.nationality}</p>
-                <span className={`text-sm font-bold rarity-${currentPlayer.rarity.toLowerCase()}`}>
-                  {currentPlayer.rarity}
-                </span>
-              </div>
-
-              {/* Stats grid */}
-              <div className="px-4 pb-4">
-                <div className="grid grid-cols-2 gap-1 text-xs">
-                  {[
-                    ['🏏 Runs', currentPlayer.runs],
-                    ['📊 Avg', currentPlayer.battingAverage],
-                    ['⚡ SR', currentPlayer.strikeRate],
-                    ['🎯 Wkts', currentPlayer.wickets],
-                    ['💰 Eco', currentPlayer.economy || '—'],
-                    ['6️⃣ Sixes', currentPlayer.sixes],
-                    ['🤲 Catches', currentPlayer.catches],
-                    ['⭐ FP', currentPlayer.fantasyPoints],
-                  ].map(([label, val]) => (
-                    <div key={label as string} className="flex justify-between p-1 rounded"
-                      style={{ background: 'rgba(255,255,255,0.04)' }}>
-                      <span className="text-gray-400">{label}</span>
-                      <span className="text-white font-bold">{val}</span>
-                    </div>
-                  ))}
+              <div className="text-right">
+                <div className={`text-5xl font-black ${timerUrgent ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {a.timer}
                 </div>
-              </div>
-
-              {/* Minimum bid */}
-              <div className="px-4 pb-4 text-center">
-                <span className="text-xs text-gray-500">Min Bid: </span>
-                <span className="text-amber-400 font-bold">{currentPlayer.minimumBid} pts</span>
-                <span className="text-gray-500 text-xs ml-2">| Market: </span>
-                <span className="text-green-400 font-bold text-xs">{currentPlayer.marketValue} pts</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Bidding Panel */}
-          <div className="md:col-span-2 flex flex-col gap-4">
-            {/* Current bid & timer */}
-            <div className="glass-panel rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-gray-400 text-sm">Current Bid</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-display text-5xl text-amber-400">{a.currentBid}</span>
-                    <span className="text-amber-600 font-bold">pts</span>
-                  </div>
-                  {currentBidder ? (
-                    <p className="text-green-400 text-sm mt-1">
-                      🏆 {currentBidder.name === me?.name ? 'You are leading!' : `${currentBidder.name} leads`}
-                    </p>
-                  ) : (
-                    <p className="text-gray-400 text-sm mt-1">No bids yet</p>
-                  )}
-                </div>
-
-                {/* Timer */}
-                <div className={`text-center ${timerUrgent ? 'timer-urgent' : ''}`}>
-                  <div className={`font-display text-5xl ${timerUrgent ? 'text-red-400' : 'text-white'}`}>{a.timer}</div>
-                  <p className="text-gray-400 text-xs">seconds</p>
-                  <div className="w-16 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${(a.timer / room.settings.auctionTimer) * 100}%`,
-                        background: timerUrgent ? '#ef4444' : '#F59E0B',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* My budget */}
-              <div className="flex items-center justify-between p-3 rounded-lg"
-                style={{ background: 'rgba(245,158,11,0.08)' }}>
-                <span className="text-gray-400 text-sm">My Budget</span>
-                <span className="text-amber-400 font-bold">{myBudget} pts remaining</span>
-              </div>
-
-              {/* My team progress */}
-              <div className="mt-3">
-                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>Team Progress</span>
-                  <span>{myTeamSize}/{room.settings.teamSize} players</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="text-xs text-gray-400">seconds</div>
+                <div className="w-24 h-1.5 bg-white/10 rounded mt-1 overflow-hidden">
                   <div
-                    className="h-full bg-amber-500 rounded-full transition-all"
-                    style={{ width: `${(myTeamSize / room.settings.teamSize) * 100}%` }}
+                    className="h-full rounded transition-all"
+                    style={{
+                      width: `${(a.timer / room.settings.auctionTimer) * 100}%`,
+                      background: timerUrgent ? '#EF4444' : '#F59E0B'
+                    }}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Bid buttons */}
-            {!teamFull ? (
-              <div className="glass-panel rounded-2xl p-6">
-                <h3 className="text-white font-bold mb-4">Place Your Bid</h3>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {quickBids.map(amount => (
-                    <button
-                      key={amount}
-                      onClick={() => handleBid(amount)}
-                      className="py-3 rounded-xl font-bold text-black transition-all hover:scale-105 active:scale-95"
-                      style={{
-                        background: amount <= a.currentBid + 10
-                          ? 'linear-gradient(135deg, #F59E0B, #D97706)'
-                          : 'linear-gradient(135deg, #16a34a, #15803d)',
-                      }}
-                    >
-                      {amount} pts
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom bid */}
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    className="input-field flex-1"
-                    placeholder={`Custom bid (>${a.currentBid})`}
-                    value={customBid}
-                    onChange={e => setCustomBid(e.target.value)}
-                    min={a.currentBid + 1}
-                    max={myBudget}
-                  />
-                  <button
-                    onClick={() => { handleBid(Number(customBid)); setCustomBid(''); }}
-                    className="btn-gold px-4 py-2 text-sm"
-                    disabled={!customBid || Number(customBid) <= a.currentBid || Number(customBid) > myBudget}
-                  >
-                    Bid
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="glass-panel rounded-2xl p-6 text-center">
-                <div className="text-4xl mb-2">✅</div>
-                <p className="text-green-400 font-bold">Your team is complete!</p>
-                <p className="text-gray-400 text-sm mt-1">Watching others bid...</p>
+            {/* Budget warning */}
+            {budgetWarning && (
+              <div className="bg-red-900/40 border border-red-500/40 rounded-lg p-2 mb-3 text-xs text-red-400 text-center">
+                ⚠️ Low budget! Only <strong>{me?.budget} pts</strong> remaining — {slotsLeft} slots left to fill
               </div>
             )}
 
-            {/* All players budgets */}
-            <div className="glass-panel rounded-2xl p-4">
-              <h3 className="text-white font-semibold text-sm mb-3">📊 Player Standings</h3>
-              <div className="space-y-2">
-                {room.players.map(player => (
-                  <div key={player.id} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${a.currentBidder === player.id ? 'bg-amber-400 animate-pulse' : 'bg-gray-600'}`} />
-                      <span className={player.id === myId ? 'text-amber-400 font-semibold' : 'text-gray-300'}>
-                        {player.name} {player.id === myId ? '(you)' : ''}
-                      </span>
+            <div className="flex justify-between items-center mb-3 p-2 bg-white/5 rounded-lg">
+              <span className="text-gray-400 text-sm">My Budget</span>
+              <span className={`font-bold text-sm ${budgetWarning ? 'text-red-400' : 'text-gold-400'}`}>
+                {me?.budget || 0} pts remaining
+              </span>
+            </div>
+
+            {/* Team progress */}
+            <div className="flex justify-between items-center mb-2 text-xs text-gray-400">
+              <span>Team Progress</span>
+              <span>{myTeamCount}/{teamSlots} players</span>
+            </div>
+            <div className="h-2 bg-white/10 rounded overflow-hidden mb-4">
+              <div className="h-full bg-gold-400 rounded transition-all" style={{ width: `${(myTeamCount / teamSlots) * 100}%` }} />
+            </div>
+
+            {/* Quick bids */}
+            {canBidOnCurrent && me && myTeamCount < teamSlots && (
+              <>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {quickBids.slice(0, 4).map(b => (
+                    <button key={b} onClick={() => handleBid(b)} className="btn-gold py-3 text-sm font-bold">
+                      {b} pts
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="number"
+                    value={customBid}
+                    onChange={e => setCustomBid(e.target.value)}
+                    placeholder={`Custom bid (>${a.currentBid})`}
+                    className="input-field flex-1 text-sm"
+                    onKeyDown={e => e.key === 'Enter' && handleCustomBid()}
+                  />
+                  <button onClick={handleCustomBid} className="btn-gold px-4 py-2 text-sm font-bold">BID</button>
+                </div>
+              </>
+            )}
+
+            {/* Pass button */}
+            <button
+              onClick={passBid}
+              className="btn-outline w-full py-2 text-xs text-gray-500 hover:text-gray-300"
+            >
+              Pass on this player
+            </button>
+          </div>
+
+          {/* Role mix indicator */}
+          <div className="glass-panel rounded-xl p-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">My Squad Mix</span>
+              <button onClick={() => setShowSquad(!showSquad)} className="text-xs text-gold-400">
+                {showSquad ? 'Hide' : 'Show'} squad ▾
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(ROLE_LIMITS).map(([role, limits]) => {
+                const count = myRoleCounts[role] || 0;
+                const ok = count >= limits.min;
+                const full = count >= limits.max;
+                return (
+                  <div key={role} className="text-center">
+                    <div className="text-lg">{ROLE_ICONS[role]}</div>
+                    <div className={`text-xs font-bold ${full ? 'text-red-400' : ok ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {count}/{limits.max}
                     </div>
-                    <div className="flex items-center gap-4 text-right">
-                      <span className="text-gray-400">{player.team.length}/{room.settings.teamSize} 🃏</span>
-                      <span className="text-amber-400 font-bold">{player.budget} pts</span>
-                    </div>
+                    <div className="text-gray-600" style={{ fontSize: 9 }}>{role.split('-')[0]}</div>
+                    {count < limits.min && <div className="text-red-500" style={{ fontSize: 9 }}>Need {limits.min - count} more</div>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 mt-2 text-xs text-gray-500">
+              <span>🇮🇳 Indian: {indianCount}</span>
+              <span>🌍 Overseas: {overseasCount}</span>
+              <span className={overseasCount < 4 ? 'text-yellow-400' : 'text-green-400'}>
+                {overseasCount < 4 ? `Need ${4 - overseasCount} more overseas` : '✓ Good mix'}
+              </span>
+            </div>
+          </div>
+
+          {/* Squad tray */}
+          {showSquad && me && me.team.length > 0 && (
+            <div className="glass-panel rounded-xl p-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">My Squad ({me.team.length}/{teamSlots})</div>
+              <div className="flex flex-wrap gap-2">
+                {me.team.map(player => (
+                  <div key={player.id} className="flex items-center gap-1 bg-white/10 rounded-lg px-2 py-1">
+                    <span className="text-xs">{ROLE_ICONS[player.role]}</span>
+                    <span className="text-xs text-white font-medium">{player.name.split(' ').slice(-1)[0]}</span>
+                    <span className="text-xs" style={{ color: TEAM_COLORS[player.team] }}>•</span>
+                    <span className="text-xs text-gray-500">{player.nationality !== 'India' ? '🌍' : '🇮🇳'}</span>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Recent bids */}
-            {a.bids.length > 0 && (
-              <div className="glass-panel rounded-2xl p-4">
-                <h3 className="text-white font-semibold text-sm mb-3">🔔 Bid History</h3>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {[...a.bids].reverse().slice(0, 8).map((bid, i) => {
-                    const bidder = room.players.find(p => p.id === bid.bidderId);
-                    const player = PLAYERS.find(p => p.id === bid.playerId);
-                    return (
-                      <div key={i} className="flex justify-between text-xs text-gray-400">
-                        <span className="text-white">{bidder?.name}</span>
-                        <span className="text-amber-400">{bid.amount} pts</span>
-                      </div>
-                    );
-                  })}
+          {/* All players standings */}
+          <div className="glass-panel rounded-xl p-4">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">All Players</div>
+            <div className="space-y-2">
+              {room.players.map(p => (
+                <div key={p.id} className={`flex items-center gap-3 p-2 rounded-lg ${p.id === myId ? 'bg-white/10' : 'bg-white/5'}`}>
+                  <div className="w-7 h-7 rounded-full bg-gold-400/20 flex items-center justify-center text-xs font-bold text-gold-400">
+                    {p.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white truncate">
+                      {p.name} {p.id === myId ? '(You)' : ''}
+                      {!p.isConnected && <span className="text-red-400 text-xs ml-1">● offline</span>}
+                    </div>
+                    <div className="text-xs text-gray-500">{p.team.length}/{teamSlots} players</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gold-400">{p.budget} pts</div>
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default AuctionPage;
+}
